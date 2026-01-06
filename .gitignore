@@ -1,0 +1,10 @@
+cookies.json
+.link_cache.txt
+/output/
+/*venv/
+.idea/
+__pycache__/
+*.pyc
+.DS_Store
+.env
+config.yml
