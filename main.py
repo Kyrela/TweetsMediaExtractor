@@ -11,6 +11,7 @@ from yaml import safe_load, YAMLError
 from twitter_openapi_python import TwitterOpenapiPython, TwitterOpenapiPythonClient
 # noinspection PyPackageRequirements
 from twitter_openapi_python_generated.models.tweet import Tweet
+from twitter_openapi_python_generated.exceptions import *
 
 from downloaders.common import DownloadManager, VideoDownloader, DownloaderException, DownloaderError
 from downloaders.generic import generic_video_downloader
@@ -89,6 +90,8 @@ def search_timeline(client: TwitterOpenapiPythonClient, dl_manager: DownloadMana
             reset_time = headers.rate_limit_reset + 1 if headers.rate_limit_remaining <= 1 else None
             return res_data.data, res_data.cursor.bottom.value, reset_time
         except Exception as e:
+            if isinstance(e, ApiException) and e.status == 429:
+                return [], cursor, int(e.headers['x-rate-limit-reset']) + 1
             logger.error(f"Error fetching search timeline, try {retry + 1} of {dl_manager.retries}", exc_info=e)
             last_exception = e
             sleep_duration = dl_manager.backoff_factor * (2 ** retry)
@@ -125,7 +128,10 @@ def tweet_fetch_loop(client: TwitterOpenapiPythonClient) -> None:
                 time.sleep(wait_seconds)
             logger.debug(f"{prefix}Fetching page with cursor={cursor}")
             search_res, cursor, reset_time = search_timeline(client, dl_manager, config['search'], cursor=cursor)
-            logger.debug(f"New cursor: {cursor}")
+            if cursor is None:
+                logger.debug(f"{prefix}Rate limit reached within loop, restarting loop iteration.")
+                continue
+            logger.debug(f"{prefix}New cursor: {cursor}")
 
             matches = []
             logger.debug(f"{prefix}Fetched {len(search_res)} tweets.")
